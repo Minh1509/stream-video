@@ -1,1 +1,4 @@
-console.log('Phase 1: Foundations')
+import { probeVideo } from './ffprobe.js'
+
+const info = await probeVideo('samples/sample.mp4')
+console.log('Video info:', info)
