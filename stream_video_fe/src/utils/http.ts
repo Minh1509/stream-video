@@ -24,14 +24,32 @@ export async function httpGet<T>(path: string, signal?: AbortSignal): Promise<T>
   return (await response.json()) as T
 }
 
+export async function httpPost<T>(
+  path: string,
+  body: unknown,
+  signal?: AbortSignal
+): Promise<T> {
+  const url = `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal
+  })
+
+  if (!response.ok) {
+    throw new HttpError(response.status, `Request failed with status ${response.status}`)
+  }
+
+  return (await response.json()) as T
+}
+
 export async function httpPostForm<T>(
   path: string,
   form: FormData,
   signal?: AbortSignal
 ): Promise<T> {
   const url = `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
-  // Note: do NOT set Content-Type manually; the browser adds the multipart
-  // boundary automatically for FormData.
   const response = await fetch(url, {
     method: 'POST',
     headers: { Accept: 'application/json' },

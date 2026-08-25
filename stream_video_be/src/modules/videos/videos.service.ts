@@ -1,8 +1,17 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import type { ConfigType } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Queue } from 'bullmq';
 import { Repository } from 'typeorm';
+import * as jwt from 'jsonwebtoken';
+import { appConfiguration } from '../../configs';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { Video, VideoStatus } from './entities/video.entity';
 import {
@@ -18,6 +27,8 @@ export class VideosService {
     private readonly videoRepository: Repository<Video>,
     @InjectQueue(TRANSCODE_QUEUE)
     private readonly transcodeQueue: Queue<TranscodeJobData>,
+    @Inject(appConfiguration.KEY)
+    private readonly appConfig: ConfigType<typeof appConfiguration>,
   ) {}
 
   async findAll(): Promise<Video[]> {
@@ -47,7 +58,6 @@ export class VideosService {
     });
     const saved = await this.videoRepository.save(video);
 
-    // Enqueue transcode job
     await this.transcodeQueue.add(
       TRANSCODE_JOB,
       { videoId: saved.id, inputPath: file.path },
@@ -60,5 +70,37 @@ export class VideosService {
     );
 
     return saved;
+  }
+
+  issueStreamToken(videoId: string, accessKey: string): string {
+    if (accessKey !== this.appConfig.streamAccessKey) {
+      throw new UnauthorizedException('Invalid access key');
+    }
+    return jwt.sign({ videoId }, this.appConfig.jwtSecret, {
+      expiresIn: '2h',
+    });
+  }
+
+  async getStreamKey(videoId: string, token: string): Promise<Buffer> {
+    let payload: jwt.JwtPayload;
+    try {
+      payload = jwt.verify(token, this.appConfig.jwtSecret) as jwt.JwtPayload;
+    } catch {
+      throw new UnauthorizedException('Invalid or expired token');
+    }
+
+    if (payload.videoId !== videoId) {
+      throw new ForbiddenException('Token does not match this video');
+    }
+
+    const video = await this.videoRepository.findOne({ where: { id: videoId } });
+    if (!video) {
+      throw new NotFoundException(`Video with id "${videoId}" not found`);
+    }
+    if (!video.encryptionKey) {
+      throw new NotFoundException('Encryption key not found for this video');
+    }
+
+    return Buffer.from(video.encryptionKey, 'hex');
   }
 }

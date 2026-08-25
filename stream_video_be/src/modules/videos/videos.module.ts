@@ -8,7 +8,7 @@ import { existsSync, mkdirSync } from 'fs';
 import { diskStorage } from 'multer';
 import { basename, extname, join } from 'path';
 import appConfig from '../../configs/app.config';
-import { s3Configuration } from '../../configs';
+import { appConfiguration, s3Configuration } from '../../configs';
 import { Video } from './entities/video.entity';
 import { VideosController } from './videos.controller';
 import { VideosService } from './videos.service';
@@ -23,6 +23,7 @@ import { TRANSCODE_QUEUE } from './transcode-queue/transcode-queue.constant';
     TranscodeModule,
     AwsS3Module,
     ConfigModule.forFeature(s3Configuration),
+    ConfigModule.forFeature(appConfiguration),
     BullModule.registerQueue({ name: TRANSCODE_QUEUE }),
     MulterModule.registerAsync({
       useFactory: (config: ConfigType<typeof appConfig>) => {

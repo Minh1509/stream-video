@@ -42,6 +42,9 @@ export class Video {
   @Column({ type: 'text', name: 'source_filename', default: '' })
   sourceFilename: string;
 
+  @Column({ type: 'varchar', length: 32, name: 'encryption_key', nullable: true })
+  encryptionKey: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
