@@ -5,4 +5,6 @@ export default registerAs('app', () => ({
   storageDir: process.env.STORAGE_DIR || 'storage',
   ffmpegPath: process.env.FFMPEG_PATH || '',
   ffprobePath: process.env.FFPROBE_PATH || '',
+  jwtSecret: process.env.JWT_SECRET || 'change-me-in-production',
+  streamAccessKey: process.env.STREAM_ACCESS_KEY || 'dev-access-key',
 }));

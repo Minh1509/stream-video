@@ -54,6 +54,7 @@ export class TranscodeProcessor extends WorkerHost {
         hlsMasterUrl: `${base}/${result.masterRelativePath}`,
         thumbnailUrl: `${base}/${result.thumbnailRelativePath}`,
         duration: result.duration,
+        encryptionKey: result.encryptionKey,
       });
       this.logger.log(`[${videoId}] transcode complete`);
 

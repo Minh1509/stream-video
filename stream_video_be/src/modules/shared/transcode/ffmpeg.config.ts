@@ -3,8 +3,9 @@ import { HLS_SEGMENT_SECONDS, Rendition } from './rendition.constant';
 export function optionHlsOutput(
   rendition: Rendition,
   segmentPattern: string,
+  keyInfoPath?: string,
 ): string[] {
-  return [
+  const opts = [
     '-preset',
     'veryfast',
     '-profile:v',
@@ -30,4 +31,10 @@ export function optionHlsOutput(
     '-hls_segment_filename',
     segmentPattern,
   ];
+
+  if (keyInfoPath) {
+    opts.push('-hls_key_info_file', keyInfoPath);
+  }
+
+  return opts;
 }

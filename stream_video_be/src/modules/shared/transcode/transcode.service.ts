@@ -2,7 +2,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { appConfiguration } from 'src/configs';
 import { join } from 'path';
-import { mkdir, rm, writeFile } from 'fs/promises';
+import { mkdir, rm, unlink, writeFile } from 'fs/promises';
+import { randomBytes } from 'crypto';
 import { FfmpegService } from '../ffmpeg';
 import { TranscodeResult } from './transcode.type';
 import { Rendition, RENDITIONS } from './rendition.constant';
@@ -26,20 +27,27 @@ export class TranscodeService {
     inputPath: string,
     videoId: string,
   ): Promise<TranscodeResult> {
-    // 1. Get information video
     const probe = await this.ffmpegService.probe(inputPath);
 
-    // 2. Select renditions <= the source (fallback to smallest)
     const matched = RENDITIONS.filter((r) => r.height <= probe.height);
     const renditions = matched.length ? matched : [RENDITIONS[0]];
 
-    // 3. Output directory
     const baseRelative = join('hls', videoId);
     const baseDir = join(this.storageRoot, baseRelative);
     await mkdir(baseDir, { recursive: true });
 
+    // Generate AES-128 key 
+    const keyBytes = randomBytes(16);
+    const keyHex = keyBytes.toString('hex');
+    const keyFilePath = join(baseDir, 'enc.key');
+    const keyInfoPath = join(baseDir, 'enc.keyinfo');
+
+    const keyUri = `${this.appConfig.appUrl}/videos/${videoId}/stream/key`;
+    await writeFile(keyFilePath, keyBytes);
+    // keyinfo format: <URI>\n<local key file path>\n
+    await writeFile(keyInfoPath, `${keyUri}\n${keyFilePath}\n`, 'utf-8');
+
     try {
-      // 4. Transcode each rendition to HLS
       for (const rendition of renditions) {
         const renditionDir = join(baseDir, rendition.name);
         await mkdir(renditionDir, { recursive: true });
@@ -50,10 +58,10 @@ export class TranscodeService {
           renditionDir,
           rendition,
           probe.hasAudio,
+          keyInfoPath,
         );
       }
 
-      // 5. Write master playlist referencing renditions
       const master = [
         '#EXTM3U',
         '#EXT-X-VERSION:3',
@@ -64,8 +72,11 @@ export class TranscodeService {
       ].join('\n');
       await writeFile(join(baseDir, 'master.m3u8'), master, 'utf-8');
 
-      // 6. Generate thumbnail
       await this.ffmpegService.generateThumbnail(inputPath, baseDir);
+
+      // Clean up temp key files
+      await unlink(keyFilePath).catch(() => undefined);
+      await unlink(keyInfoPath).catch(() => undefined);
 
       return {
         masterRelativePath: toUrlPath(join(baseRelative, 'master.m3u8')),
@@ -73,11 +84,12 @@ export class TranscodeService {
         duration: probe.duration,
         outputDir: baseDir,
         keyPrefix: toUrlPath(baseRelative),
+        encryptionKey: keyHex,
       };
     } catch (err) {
-      await rm(baseDir, { recursive: true, force: true }).catch(
-        () => undefined,
-      );
+      await unlink(keyFilePath).catch(() => undefined);
+      await unlink(keyInfoPath).catch(() => undefined);
+      await rm(baseDir, { recursive: true, force: true }).catch(() => undefined);
       throw err;
     }
   }
@@ -87,6 +99,7 @@ export class TranscodeService {
     outputDir: string,
     rendition: Rendition,
     hasAudio: boolean,
+    keyInfoPath: string,
   ): Promise<void> {
     const playlist = join(outputDir, 'index.m3u8');
     const segmentPattern = join(outputDir, 'seg_%03d.ts');
@@ -100,7 +113,7 @@ export class TranscodeService {
       }
 
       return command
-        .outputOptions(optionHlsOutput(rendition, segmentPattern))
+        .outputOptions(optionHlsOutput(rendition, segmentPattern, keyInfoPath))
         .output(playlist);
     });
   }

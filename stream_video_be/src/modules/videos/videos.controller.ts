@@ -5,10 +5,13 @@ import {
   Get,
   Param,
   Post,
+  Query,
+  Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { Video } from './entities/video.entity';
 import { VideosService } from './videos.service';
@@ -43,5 +46,26 @@ export class VideosController {
     }
     const data = await this.videosService.createFromUpload(dto, file);
     return { data };
+  }
+
+  @Post(':id/stream/token')
+  issueStreamToken(
+    @Param('id') id: string,
+    @Body('accessKey') accessKey: string,
+  ): { token: string } {
+    const token = this.videosService.issueStreamToken(id, accessKey);
+    return { token };
+  }
+
+  @Get(':id/stream/key')
+  async getStreamKey(
+    @Param('id') id: string,
+    @Query('token') token: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const keyBuffer = await this.videosService.getStreamKey(id, token);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Length', keyBuffer.length);
+    res.end(keyBuffer);
   }
 }
