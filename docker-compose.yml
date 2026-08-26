@@ -1,0 +1,25 @@
+services:
+  floci:
+    image: floci/floci:latest
+    container_name: floci
+
+    ports:
+      - "4566:4566"
+
+    environment:
+      FLOCI_STORAGE_MODE: hybrid
+      FLOCI_STORAGE_PERSISTENT_PATH: /app/data
+
+    volumes:
+      - floci_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    networks:
+      - floci_network
+
+networks:
+  floci_network:
+    driver: bridge
+
+volumes:
+  floci_data:
