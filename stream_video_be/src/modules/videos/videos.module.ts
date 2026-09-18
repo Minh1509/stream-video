@@ -14,6 +14,7 @@ import { VideosController } from './videos.controller';
 import { VideosService } from './videos.service';
 import { TranscodeModule } from '../shared/transcode/transcode.module';
 import { AwsS3Module } from '../shared/aws-s3';
+import { AiUpscaleModule } from '../shared/ai-upscale';
 import { TranscodeProcessor } from './transcode-queue/transcode.processor';
 import { TRANSCODE_QUEUE } from './transcode-queue/transcode-queue.constant';
 
@@ -22,6 +23,7 @@ import { TRANSCODE_QUEUE } from './transcode-queue/transcode-queue.constant';
     TypeOrmModule.forFeature([Video]),
     TranscodeModule,
     AwsS3Module,
+    AiUpscaleModule,
     ConfigModule.forFeature(s3Configuration),
     ConfigModule.forFeature(appConfiguration),
     BullModule.registerQueue({ name: TRANSCODE_QUEUE }),

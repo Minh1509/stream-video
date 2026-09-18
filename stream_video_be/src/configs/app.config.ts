@@ -7,4 +7,6 @@ export default registerAs('app', () => ({
   ffprobePath: process.env.FFPROBE_PATH || '',
   jwtSecret: process.env.JWT_SECRET || 'change-me-in-production',
   streamAccessKey: process.env.STREAM_ACCESS_KEY || 'dev-access-key',
+  realesrganPath: process.env.REALESRGAN_PATH || 'bin/realesrgan/realesrgan-ncnn-vulkan.exe',
+  enableAiUpscale: process.env.ENABLE_AI_UPSCALE === 'true',
 }));

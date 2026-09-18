@@ -3,6 +3,7 @@ export interface ProbeResult {
   height: number;
   duration: number;
   hasAudio: boolean;
+  fps?: number;
 }
 
 export interface ThumbnailOptions {

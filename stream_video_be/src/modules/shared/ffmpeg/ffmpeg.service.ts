@@ -20,11 +20,19 @@ export class FfmpegService {
         if (err) return reject(err);
         const stream = data.streams.find((s) => s.codec_type === 'video');
         if (!stream) return reject(new Error('No video stream found'));
+        let fps = 30;
+        if (stream.r_frame_rate) {
+          const parts = stream.r_frame_rate.split('/');
+          if (parts.length === 2 && Number(parts[1]) > 0) {
+            fps = Math.round(Number(parts[0]) / Number(parts[1])) || 30;
+          }
+        }
         resolve({
           width: stream.width ?? 0,
           height: stream.height ?? 0,
           duration: Math.round(Number(data.format.duration) || 0),
           hasAudio: data.streams.some((s) => s.codec_type === 'audio'),
+          fps,
         });
       });
     });

@@ -4,9 +4,12 @@ import type { ConfigType } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Job } from 'bullmq';
 import { rm, unlink } from 'fs/promises';
+import { join } from 'path';
 import { Repository } from 'typeorm';
-import { s3Configuration } from '../../../configs';
+import { appConfiguration, s3Configuration } from '../../../configs';
+import { AiUpscaleService } from '../../shared/ai-upscale';
 import { AwsS3Service } from '../../shared/aws-s3';
+import { FfmpegService } from '../../shared/ffmpeg';
 import { TranscodeService } from '../../shared/transcode/transcode.service';
 import { Video, VideoStatus } from '../entities/video.entity';
 import { TRANSCODE_QUEUE, TranscodeJobData } from './transcode-queue.constant';
@@ -20,8 +23,12 @@ export class TranscodeProcessor extends WorkerHost {
     private readonly videoRepository: Repository<Video>,
     private readonly transcodeService: TranscodeService,
     private readonly awsS3Service: AwsS3Service,
+    private readonly aiUpscaleService: AiUpscaleService,
+    private readonly ffmpegService: FfmpegService,
     @Inject(s3Configuration.KEY)
     private readonly s3Config: ConfigType<typeof s3Configuration>,
+    @Inject(appConfiguration.KEY)
+    private readonly appConfig: ConfigType<typeof appConfiguration>,
   ) {
     super();
   }
@@ -29,11 +36,31 @@ export class TranscodeProcessor extends WorkerHost {
   async process(job: Job<TranscodeJobData>): Promise<void> {
     const { videoId, inputPath } = job.data;
     const isLastAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+    let actualInputPath = inputPath;
+    let upscaledTempPath: string | null = null;
 
     try {
+      // 0. Kiểm tra nếu cần chạy AI Upscale (lấy từ biến môi trường ENABLE_AI_UPSCALE trong .env)
+      if (this.aiUpscaleService.isEnabled) {
+        const probe = await this.ffmpegService.probe(inputPath);
+        if (probe.height < 1080) {
+          this.logger.log(
+            `[${videoId}] Video gốc (${probe.width}x${probe.height}) < 1080p. Đang kích hoạt Real-ESRGAN AI Upscale...`,
+          );
+          const storageRoot = join(process.cwd(), this.appConfig.storageDir);
+          upscaledTempPath = join(storageRoot, `upscaled-${videoId}.mp4`);
+          await this.aiUpscaleService.upscaleTo1080p(
+            inputPath,
+            upscaledTempPath,
+            probe,
+          );
+          actualInputPath = upscaledTempPath;
+        }
+      }
+
       // 1. Transcode to HLS
       const result = await this.transcodeService.transcodeToHls(
-        inputPath,
+        actualInputPath,
         videoId,
       );
 
@@ -74,6 +101,10 @@ export class TranscodeProcessor extends WorkerHost {
       }
 
       throw err;
+    } finally {
+      if (upscaledTempPath) {
+        await unlink(upscaledTempPath).catch(() => undefined);
+      }
     }
   }
 }
